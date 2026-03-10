@@ -1,0 +1,54 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "insurance-glm-cluster"
+version = "0.1.0"
+description = "Automated GLM factor level clustering for insurance pricing using the R2VF algorithm"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [
+    { name = "Burning Cost", email = "pricing.frontier@gmail.com" },
+]
+keywords = ["insurance", "pricing", "GLM", "clustering", "actuarial"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Financial and Insurance Industry",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Mathematics",
+]
+
+dependencies = [
+    "numpy>=1.24",
+    "pandas>=1.5",
+    "scipy>=1.12",
+    "statsmodels>=0.14",
+    "scikit-learn>=1.3",
+]
+
+[project.optional-dependencies]
+fast = ["glum>=2.4"]
+plot = ["matplotlib>=3.6"]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "glum>=2.4",
+    "matplotlib>=3.6",
+]
+
+[project.urls]
+Homepage = "https://github.com/burning-cost/insurance-glm-cluster"
+Repository = "https://github.com/burning-cost/insurance-glm-cluster"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/insurance_glm_cluster"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
