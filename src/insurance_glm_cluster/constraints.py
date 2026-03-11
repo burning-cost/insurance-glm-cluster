@@ -118,6 +118,52 @@ def enforce_min_claims(
     )
 
 
+def _pav_increasing(values: NDArray[np.float64]) -> NDArray[np.float64]:
+    """
+    Pool adjacent violators for monotone increasing constraint.
+
+    Pure NumPy implementation that works with any scipy version.
+
+    Parameters
+    ----------
+    values : NDArray[np.float64]
+        Input values to project onto the increasing cone.
+
+    Returns
+    -------
+    NDArray[np.float64]
+        Monotone increasing values of the same length.
+    """
+    n = len(values)
+    result = values.copy()
+
+    # Build blocks iteratively
+    i = 0
+    blocks: list[list[float]] = []
+    block_means: list[float] = []
+
+    for v in result:
+        block = [v]
+        mean = v
+        while block_means and block_means[-1] > mean:
+            # Merge with previous block
+            prev = blocks.pop()
+            block = prev + block
+            mean = sum(block) / len(block)
+            block_means.pop()
+        blocks.append(block)
+        block_means.append(mean)
+
+    # Flatten
+    idx = 0
+    for block, mean in zip(blocks, block_means):
+        for _ in block:
+            result[idx] = mean
+            idx += 1
+
+    return result
+
+
 def enforce_monotonicity(
     group_coefficients: pd.Series,
     direction: str = "increasing",
@@ -125,8 +171,9 @@ def enforce_monotonicity(
     """
     Project group coefficients onto the monotone cone.
 
-    Uses the pool adjacent violators (PAV) algorithm via scipy's
-    isotonic_regression (requires scipy >= 1.12).
+    Uses scipy's isotonic_regression (scipy >= 1.12) when available,
+    falling back to a pure NumPy pool adjacent violators implementation
+    for older scipy versions.
 
     Parameters
     ----------
@@ -143,19 +190,9 @@ def enforce_monotonicity(
 
     Raises
     ------
-    ImportError
-        If scipy < 1.12 (isotonic_regression not available).
     ValueError
         If direction is not 'increasing' or 'decreasing'.
     """
-    try:
-        from scipy.optimize import isotonic_regression
-    except ImportError as exc:
-        raise ImportError(
-            "scipy >= 1.12 is required for monotonicity enforcement. "
-            "Current scipy version does not have isotonic_regression."
-        ) from exc
-
     if direction not in ("increasing", "decreasing"):
         raise ValueError(
             f"direction must be 'increasing' or 'decreasing', got '{direction}'."
@@ -164,16 +201,23 @@ def enforce_monotonicity(
     sorted_idx = group_coefficients.sort_index()
     values = sorted_idx.values.astype(np.float64)
 
-    if direction == "increasing":
-        result = isotonic_regression(values, increasing=True)
-    else:
-        result = isotonic_regression(values, increasing=False)
+    if direction == "decreasing":
+        values = -values
 
-    # isotonic_regression returns a namedtuple-like; extract .x in scipy >= 1.12
-    if hasattr(result, "x"):
-        monotone_values = result.x
-    else:
-        monotone_values = np.asarray(result)
+    # Try scipy >= 1.12 first
+    try:
+        from scipy.optimize import isotonic_regression
+        result = isotonic_regression(values, increasing=True)
+        if hasattr(result, "x"):
+            monotone_values = result.x
+        else:
+            monotone_values = np.asarray(result)
+    except ImportError:
+        # Fallback: pure NumPy PAV
+        monotone_values = _pav_increasing(values)
+
+    if direction == "decreasing":
+        monotone_values = -monotone_values
 
     return pd.Series(monotone_values, index=sorted_idx.index)
 
@@ -201,7 +245,17 @@ def check_monotonicity(
         True if monotone.
     list[int]
         Indices of violating pairs (group codes where the constraint is broken).
+
+    Raises
+    ------
+    ValueError
+        If direction is not 'increasing' or 'decreasing'.
     """
+    if direction not in ("increasing", "decreasing"):
+        raise ValueError(
+            f"direction must be 'increasing' or 'decreasing', got '{direction}'."
+        )
+
     sorted_coef = group_coefficients.sort_index()
     values = sorted_coef.values
     indices = sorted_coef.index.tolist()

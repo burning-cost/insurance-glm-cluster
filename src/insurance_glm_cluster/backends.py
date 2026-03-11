@@ -144,14 +144,14 @@ class StatsmodelsBackend:
         """Fitted coefficients (including intercept)."""
         if self._result is None:
             raise RuntimeError("Model has not been fitted.")
-        return self._result.params.values.astype(np.float64)
+        return np.asarray(self._result.params, dtype=np.float64)
 
     @property
     def fitted_values_(self) -> NDArray[np.float64]:
         """Fitted means on the response scale."""
         if self._result is None:
             raise RuntimeError("Model has not been fitted.")
-        return self._result.fittedvalues.values.astype(np.float64)
+        return np.asarray(self._result.fittedvalues, dtype=np.float64)
 
     @property
     def log_likelihood_(self) -> float:
