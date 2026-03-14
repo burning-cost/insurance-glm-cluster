@@ -1,5 +1,24 @@
 # insurance-glm-cluster
 
+> **DEPRECATED.** This repository is archived. All functionality has been reconciled into [insurance-glm-tools](https://github.com/burning-cost/insurance-glm-tools), which is the canonical home for GLM factor clustering going forward.
+>
+> **Migrate by replacing:**
+> ```python
+> # Old
+> from insurance_glm_cluster import FactorClusterer
+> from insurance_glm_cluster.constraints import enforce_min_claims, enforce_monotonicity, check_monotonicity
+> from insurance_glm_cluster.utils import build_split_coding_matrix, apply_split_coding
+>
+> # New
+> from insurance_glm_tools.cluster import FactorClusterer
+> from insurance_glm_tools.cluster import enforce_min_claims, enforce_monotonicity, check_monotonicity
+> from insurance_glm_tools.cluster import build_split_coding_matrix, apply_split_coding
+> ```
+>
+> The `insurance-glm-tools` cluster subpackage is a superset of this library: it has a better `DiagnosticPath`, exposure-weighted coefficient averaging in the constraint enforcement, and the full R2VF `FactorClusterer` API. Everything unique to this repo (`enforce_min_claims`, `enforce_monotonicity`, `check_monotonicity`, `build_split_coding_matrix`, `apply_split_coding`) was ported in full on 2026-03-14.
+
+---
+
 Automated GLM factor level clustering for insurance pricing.
 
 ## The problem
@@ -26,131 +45,13 @@ The split-coding trick is what makes this practical without cvxpy or specialised
 
 ## Installation
 
+Use `insurance-glm-tools` instead. This package is no longer maintained.
+
 ```bash
-pip install insurance-glm-cluster
+pip install insurance-glm-tools
 ```
-
-With the faster glum backend:
-```bash
-pip install insurance-glm-cluster[fast]
-```
-
-With plotting:
-```bash
-pip install insurance-glm-cluster[plot]
-```
-
-## Quick start
-
-```python
-from insurance_glm_cluster import FactorClusterer
-
-clusterer = FactorClusterer(
-    family='poisson',
-    link='log',
-    lambda_='bic',              # select regularisation via BIC
-    min_exposure=500,           # merge groups with < 500 earned years
-    monotone_factors=['ncd'],   # enforce NCD to be monotone decreasing
-    monotone_direction={'ncd': 'decreasing'},
-)
-
-clusterer.fit(
-    X,
-    y,
-    exposure=exposure,
-    ordinal_factors=['vehicle_age', 'ncd'],
-    nominal_factors=['vehicle_make', 'occupation'],
-)
-
-# Merged group codes — drop-in replacement for original columns
-X_merged = clusterer.transform(X)
-
-# Inspect the groupings
-lm = clusterer.level_map('vehicle_make')
-print(lm.to_df())
-#   original_level  merged_group  coefficient  exposure
-# 0          AUDI             0        -0.12    4521.3
-# 1           BMW             0        -0.12    3892.1
-# 2          FORD             1         0.08   18920.4
-# ...
-
-# Unpenalised GLM on merged factors
-result = clusterer.refit_glm(X_merged, y, exposure=exposure)
-print(result.summary())
-
-# Diagnostics
-diag = clusterer.diagnostics()
-print(f"Vehicle make: {diag['n_levels_before']['vehicle_make']} → "
-      f"{diag['n_levels_after']['vehicle_make']} groups")
-print(f"AIC before: {diag['aic_before']:.1f}, after: {diag['aic_after']:.1f}")
-```
-
-## API
-
-### `FactorClusterer`
-
-| Parameter | Type | Default | Description |
-|---|---|---|---|
-| `family` | str | `'poisson'` | GLM family: `'poisson'`, `'gamma'`, `'tweedie'` |
-| `link` | str | `'log'` | Link function |
-| `method` | str | `'r2vf'` | Clustering method (only `'r2vf'` in Phase 1) |
-| `lambda_` | float \| `'bic'` | `'bic'` | Regularisation strength or BIC selection |
-| `n_ordinal_bins` | int | 30 | Initial bins for numeric/ordinal factors |
-| `m_nominal_bins` | int | 75 | Maximum dummy levels for nominal factors in Step 1 |
-| `alpha` | float | 2.0 | 1.0 = Lasso, 2.0 = Ridge for nominal Step 1 |
-| `min_exposure` | float | None | Minimum exposure per merged group |
-| `min_claims` | int | None | Minimum claims per merged group |
-| `monotone_factors` | list | `[]` | Factors to enforce monotonicity on |
-| `monotone_direction` | dict | `{}` | Per-factor direction: `'increasing'` or `'decreasing'` |
-| `backend` | str | `'statsmodels'` | GLM backend for refit: `'statsmodels'` or `'glum'` |
-| `random_state` | int | 42 | Random seed |
-
-### `LevelMap`
-
-Returned by `clusterer.level_map(factor_name)`.
-
-```python
-lm.to_df()                      # DataFrame: original_level | merged_group | coefficient | exposure
-lm.n_groups()                   # int: number of merged groups
-lm.n_levels_original()          # int: original cardinality
-lm.compression_ratio()          # float: levels / groups
-lm.validate_monotone('increasing')  # bool
-lm.plot()                       # matplotlib Figure (requires [plot] extra)
-```
-
-## Design decisions
-
-**Why R2VF and not generalised fused lasso directly?**
-GFL with all-pairs penalties is O(K²) in the number of levels. For 500 vehicle makes, that's 125,000 penalty terms. R2VF reduces this to O(K) by using the Step 1 ranking to impose an ordering, then running standard (1D) fused lasso.
-
-**Why sklearn Lasso for the fusion step, not statsmodels?**
-Statsmodels doesn't do L1 penalised GLMs. The split-coding trick converts the fused lasso into a standard L1 problem on a transformed design matrix, which sklearn Lasso solves efficiently via coordinate descent. The regression target is exposure-adjusted (y/exposure with exposure as sample weights) to approximate the Poisson log-likelihood within sklearn's Gaussian-only Lasso.
-
-**Why BIC for lambda selection?**
-Cross-validation on insurance data is methodologically awkward: policies across years are correlated, and CV folds will contain leakage from multi-year policyholders. BIC selects a lambda that balances fit and complexity in-sample, which is appropriate when the goal is factor grouping rather than held-out prediction.
-
-**Why is the refit step separate from fit()?**
-Actuaries need to review the groupings before committing to a refit. The `level_map()` output is designed for this: you can inspect, challenge, and manually adjust the groups before running `refit_glm()`. Keeping the steps separate also means the clustering output is backend-agnostic.
 
 ## References
 
 - Ben Dror, I. (2025). *Variable Fusion for Insurance Pricing: R2VF Algorithm*. arXiv:2503.01521.
 - Tibshirani, R. J., & Taylor, J. (2011). The solution path of the generalized lasso. *Annals of Statistics*, 39(3), 1335–1371.
-
-## Performance
-
-Benchmarked against **manual equal-frequency banding** (5 fixed bands) on synthetic UK motor insurance data — 50,000 policies, known DGP, temporal split by accident year (train 2019–2021, calibrate 2022, test 2023). The focal factor is `vehicle_group` (ABI groups 1–50), which has a known monotone log-linear frequency effect of +0.025 per group unit in the DGP. Equal-frequency banding is the standard actuarial approach when a factor has too many levels for individual GLM estimation.
-
-| Metric | Manual (5 bands) | R2VF (BIC-selected) | Notes |
-|--------|------------------|---------------------|-------|
-| Poisson deviance (test, weighted) | baseline | measured at runtime | expected −0.5% to −3% |
-| Gini coefficient | baseline | measured at runtime | expected +0.5 to +2 pp |
-| A/E max deviation (decile) | baseline | measured at runtime | expected −5% to −20% |
-| vehicle_group bands produced | 5 (fixed a priori) | data-driven via BIC | R2VF finds natural plateaux; equal-freq cuts through them |
-| Fit time | <1s | 30–120s per factor | IRLS grid search over lambda values dominates |
-
-R2VF selects the number of groups by BIC — it does not require the actuary to specify a target band count. The expected improvement in deviance and calibration is most pronounced when the risk gradient has uneven break points: adjacent vehicle groups with near-identical frequency are merged, while genuine step-changes in risk are preserved as boundaries. Equal-frequency banding ignores this structure and cuts across uniform-risk regions.
-
-On portfolios where the risk gradient is smooth and monotone throughout (no plateaux), R2VF and equal-frequency banding converge to similar groupings. The fit time penalty (5x to 20x slower) is the primary trade-off.
-
-Run `notebooks/benchmark.py` on Databricks to reproduce.
