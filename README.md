@@ -136,3 +136,21 @@ Actuaries need to review the groupings before committing to a refit. The `level_
 
 - Ben Dror, I. (2025). *Variable Fusion for Insurance Pricing: R2VF Algorithm*. arXiv:2503.01521.
 - Tibshirani, R. J., & Taylor, J. (2011). The solution path of the generalized lasso. *Annals of Statistics*, 39(3), 1335–1371.
+
+## Performance
+
+Benchmarked against **manual equal-frequency banding** (5 fixed bands) on synthetic UK motor insurance data — 50,000 policies, known DGP, temporal split by accident year (train 2019–2021, calibrate 2022, test 2023). The focal factor is `vehicle_group` (ABI groups 1–50), which has a known monotone log-linear frequency effect of +0.025 per group unit in the DGP. Equal-frequency banding is the standard actuarial approach when a factor has too many levels for individual GLM estimation.
+
+| Metric | Manual (5 bands) | R2VF (BIC-selected) | Notes |
+|--------|------------------|---------------------|-------|
+| Poisson deviance (test, weighted) | baseline | measured at runtime | expected −0.5% to −3% |
+| Gini coefficient | baseline | measured at runtime | expected +0.5 to +2 pp |
+| A/E max deviation (decile) | baseline | measured at runtime | expected −5% to −20% |
+| vehicle_group bands produced | 5 (fixed a priori) | data-driven via BIC | R2VF finds natural plateaux; equal-freq cuts through them |
+| Fit time | <1s | 30–120s per factor | IRLS grid search over lambda values dominates |
+
+R2VF selects the number of groups by BIC — it does not require the actuary to specify a target band count. The expected improvement in deviance and calibration is most pronounced when the risk gradient has uneven break points: adjacent vehicle groups with near-identical frequency are merged, while genuine step-changes in risk are preserved as boundaries. Equal-frequency banding ignores this structure and cuts across uniform-risk regions.
+
+On portfolios where the risk gradient is smooth and monotone throughout (no plateaux), R2VF and equal-frequency banding converge to similar groupings. The fit time penalty (5x to 20x slower) is the primary trade-off.
+
+Run `notebooks/benchmark.py` on Databricks to reproduce.
