@@ -1,3 +1,5 @@
+⚠️ **This package has been merged into [`insurance-glm-tools`](https://github.com/burning-cost/insurance-glm-tools).** This repository is archived. Install `insurance-glm-tools` instead.
+
 # insurance-glm-cluster
 
 > **DEPRECATED.** This repository is archived. All functionality has been reconciled into [insurance-glm-tools](https://github.com/burning-cost/insurance-glm-tools), which is the canonical home for GLM factor clustering going forward.
